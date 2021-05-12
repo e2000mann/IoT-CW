@@ -24,53 +24,61 @@ def button_mode(landmarks, hand, palm):
 
     # check hand's radius (distance) from global origin
     radius = line_distance(0.5, palm[0], 0.5, palm[1])
-    radius = abs(radius)
-    if radius >= 0.25:
-        # hand not in neutral position
-        # button needs to be pressed
-        # check how many degrees from y axis hand is
-        line_c = line_distance(0.5, palm[0], 1, palm[1])
-        line_c = abs(line_c)
 
-        # lines a and b are just radius (radius)
-        cos_angle = (line_c ** 2) / (2 * radius ** 2)
-        print(cos_angle)
-        angle = math.degrees(math.acos(cos_angle))
-        print(str(angle))
+    if radius >= 0.125:
+        change_x = palm[0] - 0.5
+        change_y = 0.5 - palm[1]
+        degrees = math.degrees(math.atan2(change_x, change_y))
+        if degrees < 0:
+            degrees += 360
+        print(degrees)
 
-        if radius < 0.375:
+        if radius < 0.25:
             # inner annulus
-            button = inner_annulus[0]
+            button = inner_annulus[int(degrees // 45)]
         else:
             # outer annulus
-            button = outer_annulus[0]
+            button = outer_annulus[int(degrees // 45)]
+
+        print(button)
 
 
-def joystick_mode(landmarks, hand, centre):
+def joystick_mode(landmarks, hand, palm):
     # if origin not yet defined, define it
     if origins[hand] == (-1, -1):
-        origins[hand] = centre
+        origins[hand] = palm
 
     # else determine distance between centre and current position
     else:
-        distance = line_distance(origins[hand][0], centre[0],
-                                 origins[hand][1], centre[1])
+        change_x = palm[0] - origins[hand][0]
+        x = get_axis_value(change_x)
 
+        change_y = origins[hand][1] - palm[1]
+        y = get_axis_value(change_y)
+
+        print("x: {} y: {}".format(x,y))
 
 def hand_details(landmarks):
     frame_landmarks = get_frame_coords(landmarks)
 
-    open = check_if_hand_open(frame_landmarks)
-    hand = check_left_right(frame_landmarks[:2])
-    centre = get_palm_centre(frame_landmarks[0], frame_landmarks[5],
+
+    # stops error if part of hand out of frame
+    if len(frame_landmarks) >= 20:
+        open = check_if_hand_open(frame_landmarks)
+        hand = check_left_right(frame_landmarks[:2])
+        centre = get_palm_centre(frame_landmarks[0], frame_landmarks[5],
                              frame_landmarks[17])
 
-    if open:
-        print("{} hand is open".format(hand))
-        joystick_mode(frame_landmarks, hand, centre)
+        if open:
+            print("{} hand is open".format(hand))
+            joystick_mode(frame_landmarks, hand, centre)
+
+        else:
+            print("{} hand is closed".format(hand))
+            button_mode(frame_landmarks, hand, centre)
+
     else:
-        print("{} hand is closed".format(hand))
-        button_mode(frame_landmarks, hand, centre)
+        print("Hand partially out of frame, can't find variables")
 
 
 def get_frame_coords(landmarks):
@@ -82,10 +90,17 @@ def get_frame_coords(landmarks):
         mp_drawing._normalized_to_pixel_coordinates(normalised.x, normalised.y,
                                                     image_width, image_height)
 
-        frame_coord = ((pixel_coord[0] / image_width),
-                       (pixel_coord[1] / image_height))
+        try:
+            frame_coord = ((pixel_coord[0] / image_width),
+                          (pixel_coord[1] / image_height))
 
-        frame_landmarks.append(frame_coord)
+            frame_landmarks.append(frame_coord)
+
+        # stop error from hand being partically out of frame. sometimes this
+        # is not an issue, sometimes it is later on - this depends what
+        # landmarks are missing - hence there's a length check in hand_details
+        except TypeError:
+            pass
 
     return frame_landmarks
 
@@ -124,13 +139,28 @@ def line_distance(x1, x2, y1, y2):
     a = x1 - x2
     b = y1 - y2
     c2 = (a+b) ** 2
-    return math.sqrt(c2)
+    c = math.sqrt(c2)
+    return abs(c)
+
+
+def get_axis_value(change):
+    value = 0
+    if -0.25 < change and change < 0.25:
+        value = change * 4
+    else:
+        if change < 0:
+            value = -1
+
+        else:
+            value = 1
+
+    return value
 
 
 # main section
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(min_detection_confidence=0.5,
+hands = mp_hands.Hands(min_detection_confidence=0.75,
                        min_tracking_confidence=0.5)
 
 camera = cv2.VideoCapture(0)
