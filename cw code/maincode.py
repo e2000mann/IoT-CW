@@ -7,6 +7,10 @@ import cv2
 import mediapipe as mp
 import math
 
+# communication imports
+import bluetooth
+import pyvjoy
+
 # global variables
 # origins[0] is left, origins[1] is right
 origins = [(-1, -1), (-1, -1)]
