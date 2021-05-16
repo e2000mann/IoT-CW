@@ -29,7 +29,7 @@ def button_mode(landmarks, hand, palm):
     # check hand's radius (distance) from global origin
     radius = line_distance(0.5, palm[0], 0.5, palm[1])
 
-    if radius >= 0.125:
+    if radius >= 0.25:
         # check how many degrees from north hand is
         change_x = palm[0] - 0.5
         change_y = 0.5 - palm[1]
@@ -38,7 +38,7 @@ def button_mode(landmarks, hand, palm):
             degrees += 360
         print(degrees)
 
-        if radius < 0.25:
+        if radius < 0.375:
             # inner annulus
             button = inner_annulus[int(degrees // 45)]
         else:
@@ -170,6 +170,23 @@ def get_axis_value(change):
     return value
 
 
+def get_overlay(bg_width, bg_height):
+    # get overlay, resize to fit height of background whilst matching
+    # aspect ratio
+    overlay = cv2.imread("layout.png")
+    image_height, image_width, _ = overlay.shape
+    percentage = bg_height / image_height
+    new_image_width = int(image_width * percentage)
+    new_size = (new_image_width, bg_height)
+    overlay = cv2.resize(overlay, new_size)
+
+    # now add transparent border so that width is same as background
+    x_shift = (bg_width - new_image_width) // 2
+    overlay = cv2.copyMakeBorder(overlay, 0, 0, x_shift, x_shift,
+                                cv2.BORDER_CONSTANT, value=(0,0,0,1))
+
+    return overlay
+
 # main section
 # set up bluetooth
 server_mac = "00:19:10:09:27:26"
@@ -207,6 +224,20 @@ while camera.isOpened():
     img.flags.writeable = True
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
+    # overlay = cv2.imread("layout.png")
+    # overlay_height, overlay_width, _ = overlay.shape
+    # percentage = overlay_height / image_height
+    # overlay_width = int(overlay_width * percentage)
+    # new_size = (overlay_width, image_height)
+    # overlay = cv2.resize(overlay, new_size)
+    #
+    # space = image_width - overlay_width
+    # x_shift = space // 2
+
+    overlay = get_overlay(image_width, image_height)
+
+    added_img = cv2.addWeighted(img, 0.8, overlay, 0.2, 0)
+
     if results.multi_hand_landmarks:
         for hand_landmarks in results.multi_hand_landmarks:
             mp_drawing.draw_landmarks(img, hand_landmarks,
@@ -216,9 +247,10 @@ while camera.isOpened():
             output = hand_details(hand_landmarks) + "$"
 
             if output != "":
+                print(output)
                 s.send(bytes(output, 'UTF-8'))
 
-    cv2.imshow('MediaPipe Hands', img)
+    cv2.imshow('MediaPipe Hands', added_img)
 
     if cv2.waitKey(10) == 27:
         # Esc key to close
