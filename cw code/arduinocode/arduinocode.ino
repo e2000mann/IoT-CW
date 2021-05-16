@@ -1,11 +1,15 @@
+// up887818
+// IOT Coursework - Creating IOT Application for Video Game Controller
+// Receiver Code
+
 #include <SoftwareSerial.h> // serial library
-SoftwareSerial mySerial(2, 3); // rx = 2, tx = 3
+SoftwareSerial mySerial(10, 11); // rx = 10, tx = 11
 
 char BluetoothData; // gets button name from bt
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(4800);
+  Serial.begin(9600);
   mySerial.begin(9600);
   
   Serial.println("Bluetooth is on!");
@@ -29,9 +33,11 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  if (mySerial.available()){
-    BluetoothData = mySerial.read();
-    Serial.print(BluetoothData);
-    delay(100); // prepare for next data
-  }
+    while (mySerial.available()) {
+        Serial.write(mySerial.read());
+    }
+
+    while (Serial.available()) {
+        mySerial.write(Serial.read());
+    }
 }

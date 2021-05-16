@@ -2,14 +2,14 @@
 # IOT Coursework - Creating IOT Application for Video Game Controller
 # Main Code
 
-# imports
+# algorithm imports
 import cv2
 import mediapipe as mp
 import math
 
 # communication imports
-import bluetooth
-import pyvjoy
+import socket
+import subprocess
 
 # global variables
 # origins[0] is left, origins[1] is right
@@ -30,6 +30,7 @@ def button_mode(landmarks, hand, palm):
     radius = line_distance(0.5, palm[0], 0.5, palm[1])
 
     if radius >= 0.125:
+        # check how many degrees from north hand is
         change_x = palm[0] - 0.5
         change_y = 0.5 - palm[1]
         degrees = math.degrees(math.atan2(change_x, change_y))
@@ -44,7 +45,11 @@ def button_mode(landmarks, hand, palm):
             # outer annulus
             button = outer_annulus[int(degrees // 45)]
 
-        print(button)
+    if button:
+        return button
+    else:
+        return ""
+
 
 
 def joystick_mode(landmarks, hand, palm):
@@ -60,7 +65,13 @@ def joystick_mode(landmarks, hand, palm):
         change_y = origins[hand][1] - palm[1]
         y = get_axis_value(change_y)
 
-        print("x: {} y: {}".format(x,y))
+        output = "x: {} y: {}".format(x,y)
+
+    if output:
+        return output
+    else:
+        return ""
+
 
 def hand_details(landmarks):
     frame_landmarks = get_frame_coords(landmarks)
@@ -75,14 +86,15 @@ def hand_details(landmarks):
 
         if open:
             print("{} hand is open".format(hand))
-            joystick_mode(frame_landmarks, hand, centre)
+            return joystick_mode(frame_landmarks, hand, centre)
 
         else:
             print("{} hand is closed".format(hand))
-            button_mode(frame_landmarks, hand, centre)
+            return button_mode(frame_landmarks, hand, centre)
 
     else:
         print("Hand partially out of frame, can't find variables")
+        return ""
 
 
 def get_frame_coords(landmarks):
@@ -162,13 +174,30 @@ def get_axis_value(change):
 
 
 # main section
+# set up bluetooth
+server_mac = "00:19:10:09:27:26"
+port = 3
+passkey = "1234"
+
+# necessary as hc-06 by default needs passkey to connect
+# kill any "bluetooth-agent" process that is already running, then start
+# a new "bluetooth-agent" process which includes passkey
+# subprocess.call("kill -9 `pidof bluetooth-agent`",shell=True)
+# status = subprocess.call("bluetooth-agent " + passkey + " &",shell=True)
+
+s = socket.socket(socket.AF_BLUETOOTH,
+                 socket.SOCK_STREAM,
+                 socket.BTPROTO_RFCOMM)
+s.connect((server_mac, port))
+
+# set up cv2 & mediapipe
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(min_detection_confidence=0.75,
                        min_tracking_confidence=0.5)
-
 camera = cv2.VideoCapture(0)
 
+# run application
 while camera.isOpened():
     ret, frame = camera.read()
     cv2.imshow("original", frame)
@@ -186,7 +215,10 @@ while camera.isOpened():
         for hand_landmarks in results.multi_hand_landmarks:
             mp_drawing.draw_landmarks(img, hand_landmarks,
                                       mp_hands.HAND_CONNECTIONS)
-            hand_details(hand_landmarks)
+            output = hand_details(hand_landmarks)
+
+            if output != "":
+                s.send(bytes(output, 'UTF-8'))
 
     cv2.imshow('MediaPipe Hands', img)
 
@@ -195,6 +227,7 @@ while camera.isOpened():
         break
 
 # end program
-hands.close()
-camera.release()
-cv2.destroyAllWindows()
+hands.close() # mediapipe
+camera.release() # cv2
+cv2.destroyAllWindows() # cv2
+s.close() # bluetooth
