@@ -5,7 +5,8 @@
 #include <SoftwareSerial.h> // serial library
 SoftwareSerial mySerial(10, 11); // rx = 10, tx = 11
 
-char BluetoothData; // gets button name from bt
+char bluetoothData; // gets button name from bt
+String string;
 
 void setup() {
   // put your setup code here, to run once:
@@ -34,10 +35,19 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
     while (mySerial.available()) {
-        Serial.write(mySerial.read());
+//        Serial.write(mySerial.read());
+        delay(3);
+        bluetoothData = mySerial.read();
+        if (bluetoothData != "$") {
+          string += bluetoothData;
+        } else {
+          interpret(string);
+        }
     }
+}
 
-    while (Serial.available()) {
-        mySerial.write(Serial.read());
-    }
+void interpret(String x){
+  // takes string from python & translates it into button press/joystick movement
+  String output = x + "\n";
+  Serial.println(output);
 }

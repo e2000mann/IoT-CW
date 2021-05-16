@@ -45,10 +45,9 @@ def button_mode(landmarks, hand, palm):
             # outer annulus
             button = outer_annulus[int(degrees // 45)]
 
-    if button:
         return button
-    else:
-        return ""
+
+    return ""
 
 
 
@@ -56,6 +55,7 @@ def joystick_mode(landmarks, hand, palm):
     # if origin not yet defined, define it
     if origins[hand] == (-1, -1):
         origins[hand] = palm
+        return ""
 
     # else determine distance between centre and current position
     else:
@@ -67,10 +67,7 @@ def joystick_mode(landmarks, hand, palm):
 
         output = "x: {} y: {}".format(x,y)
 
-    if output:
         return output
-    else:
-        return ""
 
 
 def hand_details(landmarks):
@@ -176,7 +173,7 @@ def get_axis_value(change):
 # main section
 # set up bluetooth
 server_mac = "00:19:10:09:27:26"
-port = 3
+port = 1
 passkey = "1234"
 
 # necessary as hc-06 by default needs passkey to connect
@@ -200,7 +197,6 @@ camera = cv2.VideoCapture(0)
 # run application
 while camera.isOpened():
     ret, frame = camera.read()
-    cv2.imshow("original", frame)
 
     img = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
     image_height, image_width, _ = img.shape
@@ -215,7 +211,9 @@ while camera.isOpened():
         for hand_landmarks in results.multi_hand_landmarks:
             mp_drawing.draw_landmarks(img, hand_landmarks,
                                       mp_hands.HAND_CONNECTIONS)
-            output = hand_details(hand_landmarks)
+
+            # $ is delimiter
+            output = hand_details(hand_landmarks) + "$"
 
             if output != "":
                 s.send(bytes(output, 'UTF-8'))
