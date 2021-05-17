@@ -40,22 +40,29 @@ def button_mode(landmarks, hand, palm):
 
         if radius < 0.375:
             # inner annulus
-            button = inner_annulus[int(degrees // 45)]
+            button = int(degrees // 45)
+            button_name = inner_annulus[button]
+
+            button += 1
+
         else:
             # outer annulus
-            button = outer_annulus[int(degrees // 45)]
+            button = int(degrees // 45)
+            button_name = outer_annulus[int(degrees // 45)]
 
-        return button
+            button = (button + 1) * 2
 
-    return ""
-
+        print(button_name, button)
+        # send B to show it's button output
+        s.send(bytes("B", 'UTF-8'))
+        # send button value from 1-16
+        s.send(bytes(str(button), 'UTF-8'))
 
 
 def joystick_mode(landmarks, hand, palm):
     # if origin not yet defined, define it
     if origins[hand] == (-1, -1):
         origins[hand] = palm
-        return ""
 
     # else determine distance between centre and current position
     else:
@@ -65,15 +72,20 @@ def joystick_mode(landmarks, hand, palm):
         change_y = origins[hand][1] - palm[1]
         y = get_axis_value(change_y)
 
-        output = "x: {} y: {}".format(x,y)
+        print("x: {} y: {}".format(x,y))
 
-        return output
+        # send J to show it's joystick output
+        s.send(bytes("J", "UTF-8"))
+        # send hand value
+        s.send(bytes(str(hand), "UTF-8"))
+        # send x
+        s.send(bytes(str(x), "UTF-8"))
+        # send y
+        s.send(bytes(str(y), "UTF-8"))
 
 
 def hand_details(landmarks):
     frame_landmarks = get_frame_coords(landmarks)
-
-
     # stops error if part of hand out of frame
     if len(frame_landmarks) >= 20:
         open = check_if_hand_open(frame_landmarks)
@@ -224,33 +236,18 @@ while camera.isOpened():
     img.flags.writeable = True
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    # overlay = cv2.imread("layout.png")
-    # overlay_height, overlay_width, _ = overlay.shape
-    # percentage = overlay_height / image_height
-    # overlay_width = int(overlay_width * percentage)
-    # new_size = (overlay_width, image_height)
-    # overlay = cv2.resize(overlay, new_size)
-    #
-    # space = image_width - overlay_width
-    # x_shift = space // 2
-
     overlay = get_overlay(image_width, image_height)
 
-    added_img = cv2.addWeighted(img, 0.8, overlay, 0.2, 0)
+    added_img = cv2.addWeighted(img, 0.5, overlay, 0.5, 0)
 
     if results.multi_hand_landmarks:
         for hand_landmarks in results.multi_hand_landmarks:
-            mp_drawing.draw_landmarks(img, hand_landmarks,
+            mp_drawing.draw_landmarks(added_img, hand_landmarks,
                                       mp_hands.HAND_CONNECTIONS)
 
-            # $ is delimiter
-            output = hand_details(hand_landmarks) + "$"
+            hand_details(hand_landmarks)
 
-            if output != "":
-                print(output)
-                s.send(bytes(output, 'UTF-8'))
-
-    cv2.imshow('MediaPipe Hands', added_img)
+    cv2.imshow('Controller', added_img)
 
     if cv2.waitKey(10) == 27:
         # Esc key to close
