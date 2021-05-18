@@ -27,7 +27,8 @@ def button_mode(landmarks, hand, palm):
     origins[hand] = (-1, -1)
 
     # check hand's radius (distance) from global origin
-    radius = line_distance(0.5, palm[0], 0.5, palm[1])
+    radius = line_distance([0.5, palm[0]], [0.5, palm[1]])
+    print(radius)
 
     if radius >= 0.25:
         # check how many degrees from north hand is
@@ -43,20 +44,22 @@ def button_mode(landmarks, hand, palm):
             button = int(degrees // 45)
             button_name = inner_annulus[button]
 
-            button += 1
-
         else:
             # outer annulus
             button = int(degrees // 45)
             button_name = outer_annulus[int(degrees // 45)]
 
-            button = (button + 1) * 2
+            button = button + 8
 
-        print(button_name, button)
-        # send B to show it's button output
-        s.send(bytes("B", 'UTF-8'))
-        # send button value from 1-16
-        s.send(bytes(str(button), 'UTF-8'))
+    else:
+        button = 17
+
+    # send B to show it's button output
+    s.send(bytes("B", 'UTF-8'))
+    # send hand value
+    s.send(bytes(str(hand), "UTF-8"))
+    # send button value from 1-16
+    s.send(bytes(str(button), 'UTF-8'))
 
 
 def joystick_mode(landmarks, hand, palm):
@@ -160,9 +163,9 @@ def check_left_right(landmarks):
         return 0
 
 
-def line_distance(x1, x2, y1, y2):
-    a = x1 - x2
-    b = y1 - y2
+def line_distance(x, y):
+    a = max(x) - min(x)
+    b = max(y) - min(y)
     c2 = (a+b) ** 2
     c = math.sqrt(c2)
     return abs(c)
