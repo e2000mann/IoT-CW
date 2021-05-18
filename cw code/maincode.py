@@ -20,6 +20,8 @@ inner_annulus = ["TRIANGLE", "RIGHT", "CIRCLE", "DOWN",
 outer_annulus = ["OPTIONS", "R2", "R1", "PS",
                  "TOUCHPAD", "L1", "L2", "SHARE"]
 
+# previous_landmarks[0] is left, previous_landmarks[1] is right
+previous_landmarks = [[], []]
 
 # subroutines
 def button_mode(landmarks, hand, palm):
@@ -59,6 +61,7 @@ def button_mode(landmarks, hand, palm):
     # send hand value
     s.send(bytes(str(hand), "UTF-8"))
     # send button value from 1-16
+    print(button)
     s.send(bytes(str(button), 'UTF-8'))
 
 
@@ -96,13 +99,16 @@ def hand_details(landmarks):
         centre = get_palm_centre(frame_landmarks[0], frame_landmarks[5],
                              frame_landmarks[17])
 
+        hand_landmarks = [open, hand, centre]
+        carry_on = check_previous_landmarks(hand_landmarks)
+
         if open:
             print("{} hand is open".format(hand))
-            return joystick_mode(frame_landmarks, hand, centre)
+            joystick_mode(frame_landmarks, hand, centre)
 
         else:
             print("{} hand is closed".format(hand))
-            return button_mode(frame_landmarks, hand, centre)
+            button_mode(frame_landmarks, hand, centre)
 
     else:
         print("Hand partially out of frame, can't find variables")
@@ -161,6 +167,27 @@ def check_left_right(landmarks):
         return 1
     else:
         return 0
+
+
+def check_previous_landmarks(landmarks):
+    # checks if it is worth updating
+    # landmarks[0] = open, landmarks[1] = hand
+    # landmarks[2] = centre
+    # left hand
+    check = previous_landmarks[landmarks[1]]
+    previous_landmarks[landmarks[1]] = landmarks
+
+    if landmarks[0] != check[0]:
+        return True
+    else:
+        old_centre = check[2]
+        centre = landmarks[2]
+        distance = line_distance([old_centre[0], centre[0]],
+                                [old_centre[1], centre[1]])
+        if distance > 0.05:
+            return True
+
+    return False
 
 
 def line_distance(x, y):
