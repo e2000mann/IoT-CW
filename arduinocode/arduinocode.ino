@@ -13,9 +13,9 @@ SoftwareSerial mySerial(10, 11); // rx = 10, tx = 11
 // library manager, it won't work :)
 
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID, JOYSTICK_TYPE_GAMEPAD,
-                   16, 2,                  // 16 Buttons, 2 Joysticks
-                   true, true, false,    // X and Y axes, no Z axis
-                   false, false, false,    // No Rx, Ry, or Rz
+                   16, 0,                  // 16 Buttons, No HatSwitches
+                   true, true, false,      // X and Y axes, no Z
+                   true, true, false,      // Rx and Ry axes, no Rz
                    false, false,           // No rudder or throttle
                    false, false, false);   // No accelerator, brake, or steering
 
@@ -34,6 +34,12 @@ void setup() {
   Serial.println("Bluetooth is on!");
 
   // initialise joystick
+  // axes ranges
+  Joystick.setXAxisRange(-100, 100);
+  Joystick.setYAxisRange(-100, 100);
+  Joystick.setRxAxisRange(-100, 100);
+  Joystick.setRyAxisRange(-100, 100);
+  // start joystick
   Joystick.begin();
 }
 
@@ -42,9 +48,7 @@ void loop() {
     delay(3);
     // get type of input & hand from python code
     char inputType = mySerial.read();
-    if (inputType == 'B' or inputType == 'J') {
-      determineMode(inputType);
-    }
+    determineMode(inputType);
   }
 }
 
@@ -58,8 +62,12 @@ void determineMode(char inputType) {
   }
   if (inputType == 'B') {
     button(handName);
-  } else {
+  } 
+  if (inputType == 'J'){
     joystick(handName);
+  }
+  if (inputType == 'U'){
+    removeMapping(handName);
   }
 }
 
@@ -94,12 +102,25 @@ void button(String hand) {
 
 void joystick(String hand) {
   // joystick mode
-  delay(3);
-  int x = mySerial.read();
-  delay(3);
-  int y = mySerial.read();
-  String str = hand + String(x) + String(y);
-  Serial.println(str);
+  float x = getMultiByteValue();
+  float y = getMultiByteValue();
+  if (hand == "left"){
+    Joystick.setXAxis(x);
+    Joystick.setYAxis(y);
+  } else {
+    Joystick.setRxAxis(x);
+    Joystick.setRyAxis(y);
+  }
+}
+
+void removeMapping(String hand) {
+  if (hand == "left"){
+    Joystick.releaseButton(buttonLeftValue);
+    buttonLeftValue = 17;
+  } else {
+    Joystick.releaseButton(buttonRightValue);
+    buttonLeftValue = 17;
+  }
 }
 
 float getMultiByteValue() {
@@ -109,14 +130,11 @@ float getMultiByteValue() {
   bool notAtEnd = true;
   while (notAtEnd) {
     btData = mySerial.read();
-    notAtEnd = (btData != 'B') and (btData != 'Q');
-    Serial.println(notAtEnd);
+    notAtEnd = !isAlpha(btData);
     if (notAtEnd) {
       output = output + btData;
     }
   }
-
-  Serial.println(output);
 
   return output.toFloat();
 }

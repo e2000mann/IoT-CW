@@ -14,14 +14,15 @@ import subprocess
 # global variables
 # origins[0] is left, origins[1] is right
 origins = [(-1, -1), (-1, -1)]
+# held_button[0] is left, held_button[1] is right
+# using "17" as placeholder as only 16 buttons
+held_button = [17, 17]
 
 inner_annulus = ["TRIANGLE", "RIGHT", "CIRCLE", "DOWN",
                  "CROSS", "LEFT", "SQUARE", "UP"]
 outer_annulus = ["OPTIONS", "R2", "R1", "PS",
                  "TOUCHPAD", "L1", "L2", "SHARE"]
 
-# previous_landmarks[0] is left, previous_landmarks[1] is right
-previous_landmarks = [[], []]
 
 # subroutines
 def button_mode(landmarks, hand, palm):
@@ -56,19 +57,21 @@ def button_mode(landmarks, hand, palm):
     else:
         button = 17
 
-    # send B to show it's button output
-    s.send(bytes("B", 'UTF-8'))
-    # send hand value
-    s.send(bytes(str(hand), "UTF-8"))
-    # send button value from 1-16
+    held_button[hand] = button
     print(button)
-    s.send(bytes(str(button), 'UTF-8'))
+
+    send = "B{}{}".format(hand, button)
+    # B = button
+    s.send(bytes(send, "UTF-8"))
 
 
 def joystick_mode(landmarks, hand, palm):
     # if origin not yet defined, define it
     if origins[hand] == (-1, -1):
         origins[hand] = palm
+        # remove held button
+        held_button[hand] = 17
+        update_button(hand)
 
     # else determine distance between centre and current position
     else:
@@ -80,17 +83,21 @@ def joystick_mode(landmarks, hand, palm):
 
         print("x: {} y: {}".format(x,y))
 
-        # send J to show it's joystick output
-        s.send(bytes("J", "UTF-8"))
-        # send hand value
-        s.send(bytes(str(hand), "UTF-8"))
-        # send x
-        s.send(bytes(str(x), "UTF-8"))
-        # send y
-        s.send(bytes(str(y), "UTF-8"))
+        send = "J{}{}y{}".format(hand, x, y)
+        # J = joystick
+        # y splits x and y values
+        s.send(bytes(send,"UTF-8"))
 
 
-def hand_details(landmarks):
+def update_button(hand):
+    # remove held button
+    send = "U{}".format(hand)
+    # U = update, then hand value
+    s.send(bytes(send,"UTF-8"))
+
+
+def hand_details(landmarks, two_hands):
+
     frame_landmarks = get_frame_coords(landmarks)
     # stops error if part of hand out of frame
     if len(frame_landmarks) >= 20:
@@ -99,21 +106,23 @@ def hand_details(landmarks):
         centre = get_palm_centre(frame_landmarks[0], frame_landmarks[5],
                              frame_landmarks[17])
 
-        hand_landmarks = [open, hand, centre]
-        carry_on = check_previous_landmarks(hand_landmarks)
+        if not two_hands:
+            # remove potential button held by missing hand
+            # abs(1-0) = 0, abs(0-1) = 1
+            other_hand = abs(hand - 1)
+            held_button[other_hand] = 17
+            update_button(other_hand)
 
-        if carry_on:
-            if open:
-                print("{} hand is open".format(hand))
-                joystick_mode(frame_landmarks, hand, centre)
+        if open:
+            print("{} hand is open".format(hand))
+            joystick_mode(frame_landmarks, hand, centre)
 
-            else:
-                print("{} hand is closed".format(hand))
-                button_mode(frame_landmarks, hand, centre)
+        else:
+            print("{} hand is closed".format(hand))
+            button_mode(frame_landmarks, hand, centre)
 
     else:
         print("Hand partially out of frame, can't find variables")
-        return ""
 
 
 def get_frame_coords(landmarks):
@@ -170,32 +179,6 @@ def check_left_right(landmarks):
         return 0
 
 
-def check_previous_landmarks(landmarks):
-    # checks if it is worth updating
-    # landmarks[0] = open, landmarks[1] = hand
-    # landmarks[2] = centre
-    # left hand
-    check = previous_landmarks[landmarks[1]]
-
-    previous_landmarks[landmarks[1]] = landmarks
-    # first frame
-    if check == []:
-        return True
-    # hand has opened/closed
-    if landmarks[0] != check[0]:
-        return True
-    else:
-        old_centre = check[2]
-        centre = landmarks[2]
-        distance = line_distance([old_centre[0], centre[0]],
-                                [old_centre[1], centre[1]])
-        # hand has moved large distance
-        if distance > 0.05:
-            return True
-
-    return False
-
-
 def line_distance(x, y):
     a = max(x) - min(x)
     b = max(y) - min(y)
@@ -214,22 +197,27 @@ def get_axis_value(change):
 
         else:
             value = 1
+    # 2dp
+    value = round(value, 2)
+    return value * 100
+    # gives output between -100 and 100
 
-    return value
 
-
-def get_overlay(bg_width, bg_height):
+def get_overlay():
+    ret, frame = camera.read()
+    img = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
+    h, w, _ = img.shape
     # get overlay, resize to fit height of background whilst matching
     # aspect ratio
     overlay = cv2.imread("layout.png")
-    image_height, image_width, _ = overlay.shape
-    percentage = bg_height / image_height
-    new_image_width = int(image_width * percentage)
-    new_size = (new_image_width, bg_height)
+    overlay_h, overlay_w, _ = overlay.shape
+    percentage = h / overlay_h
+    new_overlay_w = int(overlay_w * percentage)
+    new_size = (new_overlay_w, h)
     overlay = cv2.resize(overlay, new_size)
 
     # now add transparent border so that width is same as background
-    x_shift = (bg_width - new_image_width) // 2
+    x_shift = (w - new_overlay_w) // 2
     overlay = cv2.copyMakeBorder(overlay, 0, 0, x_shift, x_shift,
                                 cv2.BORDER_CONSTANT, value=(0,0,0,1))
 
@@ -259,6 +247,9 @@ hands = mp_hands.Hands(min_detection_confidence=0.75,
                        min_tracking_confidence=0.5)
 camera = cv2.VideoCapture(0)
 
+# get overlay using 1st frame
+overlay = get_overlay()
+
 # run application
 while camera.isOpened():
     ret, frame = camera.read()
@@ -272,16 +263,15 @@ while camera.isOpened():
     img.flags.writeable = True
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    overlay = get_overlay(image_width, image_height)
-
     added_img = cv2.addWeighted(img, 0.5, overlay, 0.5, 0)
 
     if results.multi_hand_landmarks:
+        two_hands = len(results.multi_hand_landmarks) == 2
         for hand_landmarks in results.multi_hand_landmarks:
             mp_drawing.draw_landmarks(added_img, hand_landmarks,
                                       mp_hands.HAND_CONNECTIONS)
 
-            hand_details(hand_landmarks)
+            hand_details(hand_landmarks, two_hands)
 
     cv2.imshow('Controller', added_img)
 
