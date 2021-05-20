@@ -2,53 +2,59 @@
 # IOT Coursework - Creating IOT Application for Video Game Controller
 # Main Code
 
-# algorithm imports
 import cv2
 import mediapipe as mp
 import math
-# communication imports
 import socket
 
-# global variables
-# origins[0] is left, origins[1] is right
-origins = [(-1, -1), (-1, -1)]
-# held_button[0] is left, held_button[1] is right
-# using "17" as placeholder as only 16 buttons
-held_button = [17, 17]
-previous_location = [(0.5, 0.5), (0.5, 0.5)]
-
-inner_annulus = ["TRIANGLE", "RIGHT", "CIRCLE", "DOWN",
-                 "CROSS", "LEFT", "SQUARE", "UP"]
+# global constants
+movement_allowance = 0.05 # how much hand has to be moved to be new input
+inner_annulus_start = 0.25
 outer_annulus = ["OPTIONS", "R2", "R1", "PS",
                  "TOUCHPAD", "L1", "L2", "SHARE"]
+outer_annulus_start = 0.375
+global_origin = (0.5, 0.5)
+button_placeholder = 17 # using "17" as placeholder as only 16 buttons
+joy_placeholder = (-1, -1)
+max_joy_movement = 0.25 # how far hand has to go for axis to be -1 or 1
+inner_annulus = ["TRIANGLE", "RIGHT", "CIRCLE", "DOWN",
+                 "CROSS", "LEFT", "SQUARE", "UP"]
+# bluetooth constants (there is a passkey... windows will ask for it)
+server_mac = "00:19:10:09:27:26"
+port = 1
 
 
-# subroutines
+# global variables
+# 0th index is left hand, 1st index is right hand
+joy_origins = [joy_placeholder, joy_placeholder]
+held_button = [button_placeholder, button_placeholder]
+previous_location = [global_origin, global_origin]
+
+
 def button_mode(landmarks, hand, palm):
     # clear origin from joystick mode
-    origins[hand] = (-1, -1)
+    joy_origins[hand] = joy_placeholder
 
     movement = line_distance([previous_location[hand][0], palm[0]],
                             [previous_location[hand][1], palm[1]])
 
-    # press button if hand moved, 0.05 seems reasonable to avoid tremors
-    # causing accidental movements
-    if movement >= 0.05:
+    if movement >= movement_allowance:
         previous_location[hand] = palm
         # check hand's radius (distance) from global origin
-        radius = line_distance([0.5, palm[0]], [0.5, palm[1]])
+        radius = line_distance([global_origin[0], palm[0]],
+                              [global_origin[1], palm[1]])
         print(radius)
 
-        if (radius >= 0.25):
+        if (radius >= inner_annulus_start):
             # check how many degrees from north hand is
-            change_x = palm[0] - 0.5
-            change_y = 0.5 - palm[1]
+            change_x = palm[0] - global_origin[0]
+            change_y = global_origin[1] - palm[1]
             degrees = math.degrees(math.atan2(change_x, change_y))
             if degrees < 0:
                 degrees += 360
             print(degrees)
 
-            if radius < 0.375:
+            if radius < outer_annulus_start:
                 # inner annulus
                 button = int(degrees // 45)
                 button_name = inner_annulus[button]
@@ -61,10 +67,9 @@ def button_mode(landmarks, hand, palm):
                 button = button + 8
 
         else:
-            button = 17
+            button = button_placeholder
 
         held_button[hand] = button
-        print(button)
 
         send = "B{}{}".format(hand, button)
         # B = button
@@ -73,23 +78,19 @@ def button_mode(landmarks, hand, palm):
 
 def joystick_mode(landmarks, hand, palm):
     # if origin not yet defined, define it
-    if origins[hand] == (-1, -1):
-        origins[hand] = palm
+    if joy_origins[hand] == joy_placeholder:
+        joy_origins[hand] = palm
         # remove held button
         # & set previous position to origin
-        held_button[hand] = 17
-        previous_location[hand] = (0.5, 0.5)
-        update_button(hand)
+        remove_button(hand)
 
     # else determine distance between centre and current position
     else:
-        change_x = palm[0] - origins[hand][0]
+        change_x = palm[0] - joy_origins[hand][0]
         x = get_axis_value(change_x)
 
-        change_y = origins[hand][1] - palm[1]
+        change_y = joy_origins[hand][1] - palm[1]
         y = get_axis_value(change_y)
-
-        print("x: {} y: {}".format(x,y))
 
         send = "J{}{}y{}".format(hand, x, y)
         # J = joystick
@@ -97,14 +98,17 @@ def joystick_mode(landmarks, hand, palm):
         s.send(bytes(send,"UTF-8"))
 
 
-def update_button(hand):
+def remove_button(hand):
     # remove held button
-    send = "U{}".format(hand)
-    # U = update, then hand value
+    # update global variables back to defaults
+    held_button[hand] = button_placeholder
+    previous_location[hand] = global_origin
+    send = "R{}".format(hand)
+    # R = remove, then hand value
     s.send(bytes(send,"UTF-8"))
 
 
-def hand_details(landmarks, two_hands):
+def make_controller_input(landmarks, two_hands):
 
     frame_landmarks = get_frame_coords(landmarks)
     # stops error if part of hand out of frame
@@ -118,8 +122,7 @@ def hand_details(landmarks, two_hands):
             # remove potential button held by missing hand
             # abs(1-0) = 0, abs(0-1) = 1
             other_hand = abs(hand - 1)
-            held_button[other_hand] = 17
-            update_button(other_hand)
+            remove_button(other_hand)
 
         if open:
             print("{} hand is open".format(hand))
@@ -150,7 +153,7 @@ def get_frame_coords(landmarks):
 
         # stop error from hand being partically out of frame. sometimes this
         # is not an issue, sometimes it is later on - this depends what
-        # landmarks are missing - hence there's a length check in hand_details
+        # landmarks are missing so there's a length check in make_controller_input
         except TypeError:
             pass
 
@@ -158,7 +161,6 @@ def get_frame_coords(landmarks):
 
 
 def get_palm_centre(bottom, side_1, side_2):
-    # 0 = bottom, 5 = edge 1, 17 = edge 2
     avg_x = (bottom[0] + side_1[0] + side_2[0])/3
     avg_y = (bottom[1] + side_1[1] + side_2[1])/3
 
@@ -197,17 +199,15 @@ def line_distance(x, y):
 
 def get_axis_value(change):
     value = 0
-    if -0.25 < change and change < 0.25:
-        value = change * 4
+    if abs(change) < max_joy_movement:
+        value = round((change * 4), 2) * 100
     else:
         if change < 0:
-            value = -1
+            value = -100
 
         else:
-            value = 1
-    # 2dp
-    value = round(value, 2)
-    return value * 100
+            value = 100
+    return value
     # gives output between -100 and 100
 
 
@@ -232,19 +232,8 @@ def get_overlay():
     return overlay
 
 # main section
-# set up bluetooth
-server_mac = "00:19:10:09:27:26"
-port = 1
-passkey = "1234"
 
-# necessary as hc-06 by default needs passkey to connect
-# kill any "bluetooth-agent" process that is already running, then start
-# a new "bluetooth-agent" process which includes passkey
-# subprocess.call("kill -9 `pidof bluetooth-agent`",shell=True)
-# status = subprocess.call("bluetooth-agent " + passkey + " &",shell=True)
-
-s = socket.socket(socket.AF_BLUETOOTH,
-                 socket.SOCK_STREAM,
+s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM,
                  socket.BTPROTO_RFCOMM)
 s.connect((server_mac, port))
 
@@ -279,13 +268,12 @@ while camera.isOpened():
             mp_drawing.draw_landmarks(added_img, hand_landmarks,
                                       mp_hands.HAND_CONNECTIONS)
 
-            hand_details(hand_landmarks, two_hands)
+            make_controller_input(hand_landmarks, two_hands)
 
     else:
         # no hands visible, remove button presses
-        held_button = [17, 17]
-        update_button(0)
-        update_button(1)
+        remove_button(0)
+        remove_button(1)
 
     cv2.imshow('Controller', added_img)
 

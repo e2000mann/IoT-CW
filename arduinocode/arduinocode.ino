@@ -58,7 +58,7 @@ void determineMode(char inputType) {
   if (inputType == 'J'){
     joystick(handName);
   }
-  if (inputType == 'U'){
+  if (inputType == 'R'){
     removeMapping(handName);
   }
 }
