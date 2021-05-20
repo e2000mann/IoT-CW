@@ -19,6 +19,9 @@ Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID, JOYSTICK_TYPE_GAMEPAD,
                    false, false,           // No rudder or throttle
                    false, false, false);   // No accelerator, brake, or steering
 
+#include <HID_Buttons.h> // improves button manipulation
+// documentation says to import after joystick library
+
 // default button values
 int buttonLeftValue = 17;
 int buttonRightValue = 17;
@@ -51,7 +54,12 @@ void loop() {
 
 void determineMode(char inputType) {
   int hand = mySerial.read() - 48;
-  String handName = hand == 0 ? "left" : "right";
+  String handName;
+  if (hand == 0) {
+    handName = "left";
+  } else {
+    handName = "right";
+  }
   if (inputType == 'B') {
     button(handName);
   } 
@@ -69,25 +77,21 @@ void button(String hand) {
   int newValue;
   float temp = getMultiByteValue();
   newValue = temp;
-  bool alreadyPressed;
+
   if (newValue == 17) {
     if (hand == "left") {
       Joystick.releaseButton(buttonLeftValue);
     } else {
       Joystick.releaseButton(buttonLeftValue);
     }
-  }
-  else {
-    if (hand == "left"){
-      alreadyPressed = (newValue == buttonRightValue);
-      if (!(alreadyPressed)){
+  } else {
+    bool alreadyPressed = (newValue == buttonLeftValue) or (newValue == buttonRightValue);
+    if (!(alreadyPressed)) {
+      if (hand == "left") {
         Joystick.releaseButton(buttonLeftValue);
         buttonLeftValue = newValue;
         Joystick.pressButton(buttonLeftValue);
-      }
-    } else {
-      alreadyPressed = (newValue == buttonLeftValue);
-      if (!(alreadyPressed)){
+      } else {
         Joystick.releaseButton(buttonRightValue);
         buttonRightValue = newValue;
         Joystick.pressButton(buttonRightValue);
@@ -95,41 +99,6 @@ void button(String hand) {
     }
   }
 }
-
-//   bool alreadyPressed = (newValue == buttonLeftValue) or (newValue == buttonRightValue);
-//     if (!(alreadyPressed)) {
-//       if (hand == "left") {
-//         Joystick.releaseButton(buttonLeftValue);
-//         buttonLeftValue = newValue;
-//         Joystick.pressButton(buttonLeftValue);
-//       } else {
-//         Joystick.releaseButton(buttonRightValue);
-//         buttonRightValue = newValue;
-//         Joystick.pressButton(buttonRightValue);
-//       }
-//     }
-
-//   if (newValue == 17) {
-//     if (hand == "left") {
-//       Joystick.releaseButton(buttonLeftValue);
-//     } else {
-//       Joystick.releaseButton(buttonLeftValue);
-//     }
-//   } else {
-//     bool alreadyPressed = (newValue == buttonLeftValue) or (newValue == buttonRightValue);
-//     if (!(alreadyPressed)) {
-//       if (hand == "left") {
-//         Joystick.releaseButton(buttonLeftValue);
-//         buttonLeftValue = newValue;
-//         Joystick.pressButton(buttonLeftValue);
-//       } else {
-//         Joystick.releaseButton(buttonRightValue);
-//         buttonRightValue = newValue;
-//         Joystick.pressButton(buttonRightValue);
-//       }
-//     }
-//   }
-// }
 
 void joystick(String hand) {
   // joystick mode
@@ -156,13 +125,15 @@ void removeMapping(String hand) {
 
 float getMultiByteValue() {
   char btData;
-  String output = "";
+  String output;
 
   bool notAtEnd = true;
   while (notAtEnd) {
     btData = mySerial.read();
     notAtEnd = !isAlpha(btData);
-    output = notAtEnd ? output + btData : output;
+    if (notAtEnd) {
+      output = output + btData;
+    }
   }
 
   return output.toFloat();

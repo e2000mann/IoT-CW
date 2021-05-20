@@ -6,8 +6,10 @@
 import cv2
 import mediapipe as mp
 import math
+
 # communication imports
 import socket
+import subprocess
 
 # global variables
 # origins[0] is left, origins[1] is right
@@ -15,7 +17,6 @@ origins = [(-1, -1), (-1, -1)]
 # held_button[0] is left, held_button[1] is right
 # using "17" as placeholder as only 16 buttons
 held_button = [17, 17]
-previous_location = [(0.5, 0.5), (0.5, 0.5)]
 
 inner_annulus = ["TRIANGLE", "RIGHT", "CIRCLE", "DOWN",
                  "CROSS", "LEFT", "SQUARE", "UP"]
@@ -28,47 +29,40 @@ def button_mode(landmarks, hand, palm):
     # clear origin from joystick mode
     origins[hand] = (-1, -1)
 
-    movement = line_distance([previous_location[hand][0], palm[0]],
-                            [previous_location[hand][1], palm[1]])
+    # check hand's radius (distance) from global origin
+    radius = line_distance([0.5, palm[0]], [0.5, palm[1]])
+    print(radius)
 
-    # press button if hand moved, 0.05 seems reasonable to avoid tremors
-    # causing accidental movements
-    if movement >= 0.05:
-        previous_location[hand] = palm
-        # check hand's radius (distance) from global origin
-        radius = line_distance([0.5, palm[0]], [0.5, palm[1]])
-        print(radius)
+    if radius >= 0.25:
+        # check how many degrees from north hand is
+        change_x = palm[0] - 0.5
+        change_y = 0.5 - palm[1]
+        degrees = math.degrees(math.atan2(change_x, change_y))
+        if degrees < 0:
+            degrees += 360
+        print(degrees)
 
-        if (radius >= 0.25):
-            # check how many degrees from north hand is
-            change_x = palm[0] - 0.5
-            change_y = 0.5 - palm[1]
-            degrees = math.degrees(math.atan2(change_x, change_y))
-            if degrees < 0:
-                degrees += 360
-            print(degrees)
-
-            if radius < 0.375:
-                # inner annulus
-                button = int(degrees // 45)
-                button_name = inner_annulus[button]
-
-            else:
-                # outer annulus
-                button = int(degrees // 45)
-                button_name = outer_annulus[int(degrees // 45)]
-
-                button = button + 8
+        if radius < 0.375:
+            # inner annulus
+            button = int(degrees // 45)
+            button_name = inner_annulus[button]
 
         else:
-            button = 17
+            # outer annulus
+            button = int(degrees // 45)
+            button_name = outer_annulus[int(degrees // 45)]
 
-        held_button[hand] = button
-        print(button)
+            button = button + 8
 
-        send = "B{}{}".format(hand, button)
-        # B = button
-        s.send(bytes(send, "UTF-8"))
+    else:
+        button = 17
+
+    held_button[hand] = button
+    print(button)
+
+    send = "B{}{}".format(hand, button)
+    # B = button
+    s.send(bytes(send, "UTF-8"))
 
 
 def joystick_mode(landmarks, hand, palm):
@@ -76,9 +70,7 @@ def joystick_mode(landmarks, hand, palm):
     if origins[hand] == (-1, -1):
         origins[hand] = palm
         # remove held button
-        # & set previous position to origin
         held_button[hand] = 17
-        previous_location[hand] = (0.5, 0.5)
         update_button(hand)
 
     # else determine distance between centre and current position
@@ -280,12 +272,6 @@ while camera.isOpened():
                                       mp_hands.HAND_CONNECTIONS)
 
             hand_details(hand_landmarks, two_hands)
-
-    else:
-        # no hands visible, remove button presses
-        held_button = [17, 17]
-        update_button(0)
-        update_button(1)
 
     cv2.imshow('Controller', added_img)
 
