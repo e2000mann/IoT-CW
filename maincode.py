@@ -8,66 +8,66 @@ import math
 import socket
 
 # global constants
-movement_allowance = 0.05 # how much hand has to be moved to be new input
-inner_annulus_start = 0.25
-outer_annulus = ["OPTIONS", "R2", "R1", "PS",
-                 "TOUCHPAD", "L1", "L2", "SHARE"]
-outer_annulus_start = 0.375
-global_origin = (0.5, 0.5)
-button_placeholder = 17 # using "17" as placeholder as only 16 buttons
-joy_placeholder = (-1, -1)
-max_joy_movement = 0.25 # how far hand has to go for axis to be -1 or 1
-inner_annulus = ["TRIANGLE", "RIGHT", "CIRCLE", "DOWN",
+MOVEMENT_ALLOWANCE = 0.05 # how much hand has to be moved to be new input
+INNER_ANNULUS = ["TRIANGLE", "RIGHT", "CIRCLE", "DOWN",
                  "CROSS", "LEFT", "SQUARE", "UP"]
+INNER_ANNULUS_START = 0.25
+OUTER_ANNULUS = ["OPTIONS", "R2", "R1", "PS",
+                 "TOUCHPAD", "L1", "L2", "SHARE"]
+OUTER_ANNULUS_START = 0.375
+GLOBAL_ORIGIN = (0.5, 0.5)
+BUTTON_PLACEHOLDER = 17 # using "17" as placeholder as only 16 buttons
+JOY_PLACEHOLDER = (-1, -1)
+MAX_JOY_MOVEMENT = 0.25 # how far hand has to go for axis to be -1 or 1
 # bluetooth constants (there is a passkey... windows will ask for it)
-server_mac = "00:19:10:09:27:26"
-port = 1
+SERVER_MAC = "00:19:10:09:27:26"
+PORT = 1
 
 
 # global variables
 # 0th index is left hand, 1st index is right hand
-joy_origins = [joy_placeholder, joy_placeholder]
-held_button = [button_placeholder, button_placeholder]
-previous_location = [global_origin, global_origin]
+joy_origins = [JOY_PLACEHOLDER, JOY_PLACEHOLDER]
+held_button = [BUTTON_PLACEHOLDER, BUTTON_PLACEHOLDER]
+previous_location = [GLOBAL_ORIGIN, GLOBAL_ORIGIN]
 
 
 def button_mode(landmarks, hand, palm):
     # clear origin from joystick mode
-    joy_origins[hand] = joy_placeholder
+    joy_origins[hand] = JOY_PLACEHOLDER
 
     movement = line_distance([previous_location[hand][0], palm[0]],
                             [previous_location[hand][1], palm[1]])
 
-    if movement >= movement_allowance:
+    if movement >= MOVEMENT_ALLOWANCE:
         previous_location[hand] = palm
         # check hand's radius (distance) from global origin
-        radius = line_distance([global_origin[0], palm[0]],
-                              [global_origin[1], palm[1]])
+        radius = line_distance([GLOBAL_ORIGIN[0], palm[0]],
+                              [GLOBAL_ORIGIN[1], palm[1]])
         print(radius)
 
-        if (radius >= inner_annulus_start):
+        if (radius >= INNER_ANNULUS_START):
             # check how many degrees from north hand is
-            change_x = palm[0] - global_origin[0]
-            change_y = global_origin[1] - palm[1]
+            change_x = palm[0] - GLOBAL_ORIGIN[0]
+            change_y = GLOBAL_ORIGIN[1] - palm[1]
             degrees = math.degrees(math.atan2(change_x, change_y))
             if degrees < 0:
                 degrees += 360
             print(degrees)
 
-            if radius < outer_annulus_start:
+            if radius < OUTER_ANNULUS_START:
                 # inner annulus
                 button = int(degrees // 45)
-                button_name = inner_annulus[button]
+                button_name = INNER_ANNULUS[button]
 
             else:
                 # outer annulus
                 button = int(degrees // 45)
-                button_name = outer_annulus[int(degrees // 45)]
+                button_name = OUTER_ANNULUS[int(degrees // 45)]
 
                 button = button + 8
 
         else:
-            button = button_placeholder
+            button = BUTTON_PLACEHOLDER
 
         held_button[hand] = button
 
@@ -78,7 +78,7 @@ def button_mode(landmarks, hand, palm):
 
 def joystick_mode(landmarks, hand, palm):
     # if origin not yet defined, define it
-    if joy_origins[hand] == joy_placeholder:
+    if joy_origins[hand] == JOY_PLACEHOLDER:
         joy_origins[hand] = palm
         # remove held button
         # & set previous position to origin
@@ -101,8 +101,8 @@ def joystick_mode(landmarks, hand, palm):
 def remove_button(hand):
     # remove held button
     # update global variables back to defaults
-    held_button[hand] = button_placeholder
-    previous_location[hand] = global_origin
+    held_button[hand] = BUTTON_PLACEHOLDER
+    previous_location[hand] = GLOBAL_ORIGIN
     send = "R{}".format(hand)
     # R = remove, then hand value
     s.send(bytes(send,"UTF-8"))
@@ -199,7 +199,7 @@ def line_distance(x, y):
 
 def get_axis_value(change):
     value = 0
-    if abs(change) < max_joy_movement:
+    if abs(change) < MAX_JOY_MOVEMENT:
         value = round((change * 4), 2) * 100
     else:
         if change < 0:
@@ -232,10 +232,9 @@ def get_overlay():
     return overlay
 
 # main section
-
 s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM,
                  socket.BTPROTO_RFCOMM)
-s.connect((server_mac, port))
+s.connect((SERVER_MAC, PORT))
 
 # set up cv2 & mediapipe
 mp_drawing = mp.solutions.drawing_utils
