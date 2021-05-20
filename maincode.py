@@ -8,7 +8,7 @@ import math
 import socket
 
 # global constants
-MOVEMENT_ALLOWANCE = 0.05 # how much hand has to be moved to be new input
+MIN_MOVEMENT_ALLOWANCE = 0.03 # how much hand has to be moved to be new input
 INNER_ANNULUS = ["TRIANGLE", "RIGHT", "CIRCLE", "DOWN",
                  "CROSS", "LEFT", "SQUARE", "UP"]
 INNER_ANNULUS_START = 0.25
@@ -23,36 +23,42 @@ MAX_JOY_MOVEMENT = 0.25 # how far hand has to go for axis to be -1 or 1
 SERVER_MAC = "00:19:10:09:27:26"
 PORT = 1
 
-
 # global variables
+s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM,
+                 socket.BTPROTO_RFCOMM) # bluetooth socket
+# set up mediapipe & cv2
+mp_drawing = mp.solutions.drawing_utils
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(min_detection_confidence=0.6,
+                           min_tracking_confidence=0.5)
+camera = cv2.VideoCapture(0)
 # 0th index is left hand, 1st index is right hand
 joy_origins = [JOY_PLACEHOLDER, JOY_PLACEHOLDER]
 held_button = [BUTTON_PLACEHOLDER, BUTTON_PLACEHOLDER]
 previous_location = [GLOBAL_ORIGIN, GLOBAL_ORIGIN]
 
 
-def button_mode(landmarks, hand, palm):
+def button_mode(hand, palm):
     # clear origin from joystick mode
     joy_origins[hand] = JOY_PLACEHOLDER
 
     movement = line_distance([previous_location[hand][0], palm[0]],
                             [previous_location[hand][1], palm[1]])
 
-    if movement >= MOVEMENT_ALLOWANCE:
+    if MIN_MOVEMENT_ALLOWANCE <= movement:
+        print("accept")
         previous_location[hand] = palm
         # check hand's radius (distance) from global origin
         radius = line_distance([GLOBAL_ORIGIN[0], palm[0]],
                               [GLOBAL_ORIGIN[1], palm[1]])
-        print(radius)
 
-        if (radius >= INNER_ANNULUS_START):
+        if radius >= INNER_ANNULUS_START:
             # check how many degrees from north hand is
             change_x = palm[0] - GLOBAL_ORIGIN[0]
             change_y = GLOBAL_ORIGIN[1] - palm[1]
             degrees = math.degrees(math.atan2(change_x, change_y))
             if degrees < 0:
                 degrees += 360
-            print(degrees)
 
             if radius < OUTER_ANNULUS_START:
                 # inner annulus
@@ -76,41 +82,36 @@ def button_mode(landmarks, hand, palm):
         s.send(bytes(send, "UTF-8"))
 
 
-def joystick_mode(landmarks, hand, palm):
-    # if origin not yet defined, define it
+def joystick_mode(hand, palm):
     if joy_origins[hand] == JOY_PLACEHOLDER:
+        # origin not yet defined, define it
         joy_origins[hand] = palm
-        # remove held button
-        # & set previous position to origin
+        # remove held button & set previous position to origin
         remove_button(hand)
 
-    # else determine distance between centre and current position
     else:
+        # determine distance between centre and current position
         change_x = palm[0] - joy_origins[hand][0]
         x = get_axis_value(change_x)
 
         change_y = joy_origins[hand][1] - palm[1]
         y = get_axis_value(change_y)
 
-        send = "J{}{}y{}".format(hand, x, y)
-        # J = joystick
-        # y splits x and y values
+        send = "J{}{}y{}".format(hand, x, y) # J = joystick; y is delimiter
         s.send(bytes(send,"UTF-8"))
 
 
 def remove_button(hand):
-    # remove held button
-    # update global variables back to defaults
+    # remove held button & update global variables back to defaults
     held_button[hand] = BUTTON_PLACEHOLDER
     previous_location[hand] = GLOBAL_ORIGIN
-    send = "R{}".format(hand)
-    # R = remove, then hand value
+    send = "R{}".format(hand) # R = remove
     s.send(bytes(send,"UTF-8"))
 
 
-def make_controller_input(landmarks, two_hands):
+def make_controller_input(landmarks, two_hands, w, h):
 
-    frame_landmarks = get_frame_coords(landmarks)
+    frame_landmarks = get_frame_coords(landmarks, w, h)
     # stops error if part of hand out of frame
     if len(frame_landmarks) >= 20:
         open = check_if_hand_open(frame_landmarks)
@@ -120,40 +121,39 @@ def make_controller_input(landmarks, two_hands):
 
         if not two_hands:
             # remove potential button held by missing hand
-            # abs(1-0) = 0, abs(0-1) = 1
-            other_hand = abs(hand - 1)
+            other_hand = abs(hand - 1) # abs(1-0) = 0, abs(0-1) = 1
             remove_button(other_hand)
 
         if open:
             print("{} hand is open".format(hand))
-            joystick_mode(frame_landmarks, hand, centre)
+            joystick_mode(hand, centre)
 
         else:
             print("{} hand is closed".format(hand))
-            button_mode(frame_landmarks, hand, centre)
+            button_mode(hand, centre)
 
     else:
         print("Hand partially out of frame, can't find variables")
 
 
-def get_frame_coords(landmarks):
+def get_frame_coords(landmarks, w, h):
     frame_landmarks = []
 
     for point in mp_hands.HandLandmark:
         normalised = landmarks.landmark[point]
         pixel_coord =\
         mp_drawing._normalized_to_pixel_coordinates(normalised.x, normalised.y,
-                                                    image_width, image_height)
+                                                    w, h)
 
         try:
-            frame_coord = ((pixel_coord[0] / image_width),
-                          (pixel_coord[1] / image_height))
+            frame_coord = ((pixel_coord[0] / w),
+                          (pixel_coord[1] / h))
 
             frame_landmarks.append(frame_coord)
 
-        # stop error from hand being partically out of frame. sometimes this
-        # is not an issue, sometimes it is later on - this depends what
-        # landmarks are missing so there's a length check in make_controller_input
+        # stop error from hand being partically out of frame. sometimes this is
+        # not an issue, sometimes it is later on - this depends what landmarks
+        # are missing so there's a length check in make_controller_input
         except TypeError:
             pass
 
@@ -182,7 +182,7 @@ def check_if_hand_open(landmarks):
 
 
 def check_left_right(landmarks):
-    # hand 1 = right, hand 0 = left
+    # 0th index = left; 1st index = right
     if landmarks[0][0] > landmarks[1][0]:
         return 1
     else:
@@ -198,6 +198,7 @@ def line_distance(x, y):
 
 
 def get_axis_value(change):
+    # gives output between -100 and 100
     value = 0
     if abs(change) < MAX_JOY_MOVEMENT:
         value = round((change * 4), 2) * 100
@@ -208,15 +209,13 @@ def get_axis_value(change):
         else:
             value = 100
     return value
-    # gives output between -100 and 100
 
 
 def get_overlay():
-    ret, frame = camera.read()
+    _, frame = camera.read()
     img = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
     h, w, _ = img.shape
-    # get overlay, resize to fit height of background whilst matching
-    # aspect ratio
+    # get overlay, resize to fit height of bg whilst matching aspect ratio
     overlay = cv2.imread("layout.png")
     overlay_h, overlay_w, _ = overlay.shape
     percentage = h / overlay_h
@@ -231,57 +230,50 @@ def get_overlay():
 
     return overlay
 
-# main section
-s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM,
-                 socket.BTPROTO_RFCOMM)
-s.connect((SERVER_MAC, PORT))
 
-# set up cv2 & mediapipe
-mp_drawing = mp.solutions.drawing_utils
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(min_detection_confidence=0.75,
-                       min_tracking_confidence=0.5)
-camera = cv2.VideoCapture(0)
+def main():
+    s.connect((SERVER_MAC, PORT))
 
-# get overlay using 1st frame
-overlay = get_overlay()
+    overlay = get_overlay() # get overlay using 1st frame
 
-# run application
-while camera.isOpened():
-    ret, frame = camera.read()
+    while camera.isOpened(): # run application
+        _, frame = camera.read()
 
-    img = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
-    image_height, image_width, _ = img.shape
+        img = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
+        height, width, _ = img.shape
 
-    img.flags.writeable = False
-    results = hands.process(img)
-    # Draw the hand annotations on the image for output.
-    img.flags.writeable = True
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        img.flags.writeable = False
+        results = hands.process(img)
+        # draw hand annotations on the image for output.
+        img.flags.writeable = True
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    added_img = cv2.addWeighted(img, 0.5, overlay, 0.5, 0)
+        added_img = cv2.addWeighted(img, 0.5, overlay, 0.5, 0)
 
-    if results.multi_hand_landmarks:
-        two_hands = len(results.multi_hand_landmarks) == 2
-        for hand_landmarks in results.multi_hand_landmarks:
-            mp_drawing.draw_landmarks(added_img, hand_landmarks,
-                                      mp_hands.HAND_CONNECTIONS)
+        if results.multi_hand_landmarks:
+            two_hands = len(results.multi_hand_landmarks) == 2
+            for hand_landmarks in results.multi_hand_landmarks:
+                mp_drawing.draw_landmarks(added_img, hand_landmarks,
+                                        mp_hands.HAND_CONNECTIONS)
 
-            make_controller_input(hand_landmarks, two_hands)
+                make_controller_input(hand_landmarks, two_hands,
+                                     width, height)
 
-    else:
-        # no hands visible, remove button presses
-        remove_button(0)
-        remove_button(1)
+        else:
+            # no hands visible, remove button presses
+            remove_button(0)
+            remove_button(1)
 
-    cv2.imshow('Controller', added_img)
+        cv2.imshow('Controller', added_img)
 
-    if cv2.waitKey(10) == 27:
-        # Esc key to close
-        break
+        if cv2.waitKey(10) == 27:
+            break # Esc key to close
 
-# end program
-hands.close() # mediapipe
-camera.release() # cv2
-cv2.destroyAllWindows() # cv2
-s.close() # bluetooth
+    # end program
+    hands.close() # mediapipe
+    camera.release() # cv2
+    cv2.destroyAllWindows() # cv2
+    s.close() # bluetooth
+
+
+main()

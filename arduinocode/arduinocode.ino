@@ -150,7 +150,7 @@ void removeMapping(String hand) {
     buttonLeftValue = 17;
   } else {
     Joystick.releaseButton(buttonRightValue);
-    buttonLeftValue = 17;
+    buttonRightValue = 17;
   }
 }
 
