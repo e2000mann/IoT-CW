@@ -50,16 +50,24 @@ void loop() {
 }
 
 void determineMode(char inputType) {
-  int hand = mySerial.read() - 48;
-  String handName = hand == 0 ? "left" : "right";
-  if (inputType == 'B') {
-    button(handName);
-  } 
-  if (inputType == 'J'){
-    joystick(handName);
-  }
   if (inputType == 'R'){
-    removeMapping(handName);
+    char secondType = mySerial.read();
+    int hand = mySerial.read() - 48;
+    String handName = hand == 0 ? "left" : "right";
+    if (secondType == 'B'){
+      removeButtonMapping(handName);
+    } else {
+      removeJoystickMapping(handName);
+    }
+  } else {
+    int hand = mySerial.read() - 48;
+    String handName = hand == 0 ? "left" : "right";
+    if (inputType == 'B') {
+      button(handName);
+    } 
+    if (inputType == 'J'){
+      joystick(handName);
+    }
   }
 }
 
@@ -96,41 +104,6 @@ void button(String hand) {
   }
 }
 
-//   bool alreadyPressed = (newValue == buttonLeftValue) or (newValue == buttonRightValue);
-//     if (!(alreadyPressed)) {
-//       if (hand == "left") {
-//         Joystick.releaseButton(buttonLeftValue);
-//         buttonLeftValue = newValue;
-//         Joystick.pressButton(buttonLeftValue);
-//       } else {
-//         Joystick.releaseButton(buttonRightValue);
-//         buttonRightValue = newValue;
-//         Joystick.pressButton(buttonRightValue);
-//       }
-//     }
-
-//   if (newValue == 17) {
-//     if (hand == "left") {
-//       Joystick.releaseButton(buttonLeftValue);
-//     } else {
-//       Joystick.releaseButton(buttonLeftValue);
-//     }
-//   } else {
-//     bool alreadyPressed = (newValue == buttonLeftValue) or (newValue == buttonRightValue);
-//     if (!(alreadyPressed)) {
-//       if (hand == "left") {
-//         Joystick.releaseButton(buttonLeftValue);
-//         buttonLeftValue = newValue;
-//         Joystick.pressButton(buttonLeftValue);
-//       } else {
-//         Joystick.releaseButton(buttonRightValue);
-//         buttonRightValue = newValue;
-//         Joystick.pressButton(buttonRightValue);
-//       }
-//     }
-//   }
-// }
-
 void joystick(String hand) {
   // joystick mode
   float x = getMultiByteValue();
@@ -144,13 +117,23 @@ void joystick(String hand) {
   }
 }
 
-void removeMapping(String hand) {
+void removeButtonMapping(String hand) {
   if (hand == "left"){
     Joystick.releaseButton(buttonLeftValue);
     buttonLeftValue = 17;
   } else {
     Joystick.releaseButton(buttonRightValue);
     buttonRightValue = 17;
+  }
+}
+
+void removeJoystickMapping(String hand){
+  if (hand == "left"){
+    Joystick.setXAxis(0);
+    Joystick.setYAxis(0);
+  } else {
+    Joystick.setRxAxis(0);
+    Joystick.setRyAxis(0);
   }
 }
 

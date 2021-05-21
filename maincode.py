@@ -39,8 +39,7 @@ previous_location = [GLOBAL_ORIGIN, GLOBAL_ORIGIN]
 
 
 def button_mode(hand, palm):
-    # clear origin from joystick mode
-    joy_origins[hand] = JOY_PLACEHOLDER
+    remove_joystick(hand)
 
     movement = line_distance([previous_location[hand][0], palm[0]],
                             [previous_location[hand][1], palm[1]])
@@ -105,8 +104,20 @@ def remove_button(hand):
     # remove held button & update global variables back to defaults
     held_button[hand] = BUTTON_PLACEHOLDER
     previous_location[hand] = GLOBAL_ORIGIN
-    send = "R{}".format(hand) # R = remove
+    send = "RB{}".format(hand) # R = remove
     s.send(bytes(send,"UTF-8"))
+
+
+def remove_joystick(hand):
+    # remove joystick movement & update global variables back to defaults
+    joy_origins[hand] = JOY_PLACEHOLDER
+    send = "RJ{}".format(hand) # R= remove
+    s.send(bytes(send, "UTF-8"))
+
+
+def remove_both(hand):
+    remove_button(hand)
+    remove_joystick(hand)
 
 
 def make_controller_input(landmarks, two_hands, w, h):
@@ -261,8 +272,8 @@ def main():
 
         else:
             # no hands visible, remove button presses
-            remove_button(0)
-            remove_button(1)
+            remove_both(0)
+            remove_both(1)
 
         cv2.imshow('Controller', added_img)
 
