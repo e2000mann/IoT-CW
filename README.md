@@ -13,6 +13,7 @@ Python Libraries:
     - mediapipe for hand recognition
 - testcode.py:
     - [Approximate Engineering - Input](https://approxeng.github.io/approxeng.input/index.html) (linux only)
+        - The yaml file is a configuration file for this library so that I could test my controller. To use, add it into ~/.approxeng.input/
 
 Arduino Libraries:
 - [MHeironimus' ArduinoJoystickLibrary](https://github.com/MHeironimus/ArduinoJoystickLibrary)

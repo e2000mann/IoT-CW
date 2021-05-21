@@ -1,0 +1,40 @@
+axes:
+  lx:
+    code: 3
+    invert: false
+    max_value: 32767
+    min_value: -32767
+  ly:
+    code: 4
+    invert: false
+    max_value: 32767
+    min_value: -32767
+  rx:
+    code: 0
+    invert: false
+    max_value: 32767
+    min_value: -32767
+  ry:
+    code: 1
+    invert: false
+    max_value: 32767
+    min_value: -32767
+buttons:
+  circle: 306
+  cross: 308
+  ddown: 307
+  dleft: 309
+  dright: 305
+  dup: 311
+  home: 315
+  l1: 317
+  l2: 318
+  r1: 314
+  r2: 313
+  select: 319
+  square: 311
+  start: 312
+  triangle: 304
+name: Arduino LLC Arduino Leonardo
+product: 32822
+vendor: 9025
